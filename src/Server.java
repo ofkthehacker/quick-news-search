@@ -3,6 +3,45 @@ import java.io.*;
 import java.net.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.stream.Stream;
+
+class LoadNews {
+    public static void run() {
+      LoadNews listFiles = new LoadNews();
+      listFiles.listAllFiles("news");
+     }
+     public void listAllFiles(String path){
+         try(Stream<Path> paths = Files.walk(Paths.get(path))) {
+             paths.forEach(filePath -> {
+                 if (Files.isRegularFile(filePath)) {
+                     try {
+                         readContent(filePath);
+                     } catch (Exception e) {
+                         // TODO Auto-generated catch block
+                         e.printStackTrace();
+                     }
+                 }
+             });
+         } catch (IOException e) {
+             // TODO Auto-generated catch block
+             e.printStackTrace();
+         } 
+     }
+          
+     public void readContent(Path filePath) throws IOException{
+         List<String> fileList = Files.readAllLines(filePath);
+         System.out.println("" + fileList);
+     }
+     
+}
 
 // the server that can be run as a console
 public class Server {
@@ -16,21 +55,18 @@ public class Server {
 	private int port;
 	// to check if server is running
 	private boolean keepGoing;
-	// notification
-	private String notif = " *** ";
 	
 	//constructor that receive the port to listen to for connection as parameter
 	
 	public Server(int port) {
 		// the port
 		this.port = port;
-		// to display hh:mm:ss
-		sdf = new SimpleDateFormat("HH:mm:ss");
-		// an ArrayList to keep the list of the Client
-		al = new ArrayList<ClientThread>();
+		
+                al = new ArrayList<ClientThread>();
 	}
 	
 	public void start() {
+                LoadNews.run();
 		keepGoing = true;
 		//create socket server and wait for connection requests 
 		try 
@@ -40,9 +76,7 @@ public class Server {
 
 			// infinite loop to wait for connections ( till server is active )
 			while(keepGoing) 
-			{
-				display("Server waiting for Clients on port " + port + ".");
-				
+			{				
 				// accept connection if requested from client
 				Socket socket = serverSocket.accept();
 				// break if server stoped
@@ -71,13 +105,11 @@ public class Server {
 				}
 			}
 			catch(Exception e) {
-				display("Exception closing the server and clients: " + e);
 			}
 		}
 		catch (IOException e) {
             String msg = sdf.format(new Date()) + " Exception on new ServerSocket: " + e + "\n";
-			display(msg);
-		}
+			}
 	}
 	
 	// to stop the server
@@ -90,82 +122,6 @@ public class Server {
 		}
 	}
 	
-	// Display an event to the console
-	private void display(String msg) {
-		String time = sdf.format(new Date()) + " " + msg;
-		System.out.println(time);
-	}
-	
-	// to broadcast a message to all Clients
-	private synchronized boolean broadcast(String message) {
-		// add timestamp to the message
-		String time = sdf.format(new Date());
-		
-		// to check if message is private i.e. client to client message
-		String[] w = message.split(" ",3);
-		
-		boolean isPrivate = false;
-		if(w[1].charAt(0)=='@') 
-			isPrivate=true;
-		
-		
-		// if private message, send message to mentioned username only
-		if(isPrivate==true)
-		{
-			String tocheck=w[1].substring(1, w[1].length());
-			
-			message=w[0]+w[2];
-			String messageLf = time + " " + message + "\n";
-			boolean found=false;
-			// we loop in reverse order to find the mentioned username
-			for(int y=al.size(); --y>=0;)
-			{
-				ClientThread ct1=al.get(y);
-				String check=ct1.getUsername();
-				if(check.equals(tocheck))
-				{
-					// try to write to the Client if it fails remove it from the list
-					if(!ct1.writeMsg(messageLf)) {
-						al.remove(y);
-						display("Disconnected Client " + ct1.username + " removed from list.");
-					}
-					// username found and delivered the message
-					found=true;
-					break;
-				}
-				
-				
-				
-			}
-			// mentioned user not found, return false
-			if(found!=true)
-			{
-				return false; 
-			}
-		}
-		// if message is a broadcast message
-		else
-		{
-			String messageLf = time + " " + message + "\n";
-			// display message
-			System.out.print(messageLf);
-			
-			// we loop in reverse order in case we would have to remove a Client
-			// because it has disconnected
-			for(int i = al.size(); --i >= 0;) {
-				ClientThread ct = al.get(i);
-				// try to write to the Client if it fails remove it from the list
-				if(!ct.writeMsg(messageLf)) {
-					al.remove(i);
-					display("Disconnected Client " + ct.username + " removed from list.");
-				}
-			}
-		}
-		return true;
-		
-		
-	}
-
 	// if client sent LOGOUT message to exit
 	synchronized void remove(int id) {
 		
@@ -180,15 +136,8 @@ public class Server {
 				break;
 			}
 		}
-		broadcast(notif + disconnectedClient + " has left the chat room." + notif);
 	}
 	
-	/*
-	 *  To run as a console application
-	 * > java Server
-	 * > java Server portNumber
-	 * If the port number is not specified 1500 is used
-	 */ 
 	public static void main(String[] args) {
 		// start server on port 1500 unless a PortNumber is specified 
 		int portNumber = 1500;
@@ -242,11 +191,9 @@ public class Server {
 				sInput  = new ObjectInputStream(socket.getInputStream());
 				// read the username
 				username = (String) sInput.readObject();
-				broadcast(notif + username + " has joined the chat room." + notif);
 			}
 			catch (IOException e) {
-				display("Exception creating new Input/output Streams: " + e);
-				return;
+			return;
 			}
 			catch (ClassNotFoundException e) {
 			}
@@ -271,7 +218,6 @@ public class Server {
 					cm = (ChatMessage) sInput.readObject();
 				}
 				catch (IOException e) {
-					display(username + " Exception reading Streams: " + e);
 					break;				
 				}
 				catch(ClassNotFoundException e2) {
@@ -283,15 +229,7 @@ public class Server {
 				// different actions based on type message
 				switch(cm.getType()) {
 
-				case ChatMessage.MESSAGE:
-					boolean confirmation =  broadcast(username + ": " + message);
-					if(confirmation==false){
-						String msg = notif + "Sorry. No such user exists." + notif;
-						writeMsg(msg);
-					}
-					break;
 				case ChatMessage.LOGOUT:
-					display(username + " disconnected with a LOGOUT message.");
 					keepGoing = false;
 					break;
 				case ChatMessage.WHOISIN:
@@ -338,11 +276,11 @@ public class Server {
 			}
 			// if an error occurs, do not abort just inform the user
 			catch(IOException e) {
-				display(notif + "Error sending message to " + username + notif);
-				display(e.toString());
 			}
 			return true;
 		}
 	}
+
 }
+
 
